@@ -3,6 +3,9 @@
 A video playable PDF viewer built for presentations.
 `bewegtbild` let's your images move.
 
+> [!WARNING]
+> Under construction, not usable yet.
+
 ## Usage
 
 ```sh
