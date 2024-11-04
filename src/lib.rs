@@ -2,3 +2,6 @@
 
 mod app;
 pub use app::TemplateApp;
+
+mod pdf;
+mod slides;
