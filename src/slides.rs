@@ -38,6 +38,10 @@ impl SlidesCache {
         }
     }
 
+    pub fn num_pages(&self) -> usize {
+        self.slides.pdf_renderer.num_pages
+    }
+
     pub fn change_size(&mut self, window_width: i32, window_height: i32) {
         // this will outdate the cache, and trigger a re-generation
         if self.window_width != window_width || self.window_height != window_height {
