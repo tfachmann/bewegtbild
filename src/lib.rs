@@ -5,3 +5,4 @@ pub use app::TemplateApp;
 
 mod pdf;
 mod slides;
+mod video;

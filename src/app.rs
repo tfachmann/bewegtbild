@@ -91,13 +91,6 @@ impl eframe::App for TemplateApp {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            if self.player.is_none() {
-                self.player = Some(
-                    Player::new(ctx, &"./test.mp4".to_owned())
-                        .expect("Could not initialize Player"),
-                );
-                self.player.as_mut().unwrap().start();
-            }
             ctx.input(|i| {
                 // next slide
                 if i.key_pressed(egui::Key::ArrowRight)
@@ -184,15 +177,7 @@ impl eframe::App for TemplateApp {
                 egui::Layout::centered_and_justified(egui::Direction::TopDown),
                 |ui| ui.add(egui::Image::new(sized_texture).fit_to_exact_size(size)),
             );
-            if let Some(player) = self.player.as_mut() {
-                player.ui_at(
-                    ui,
-                    egui::Rect {
-                        min: egui::pos2(200.0, 300.0),
-                        max: egui::pos2(400.0, 600.0),
-                    },
-                );
-            }
+            self.slides.handle_video(self.requested_page_idx, ctx, ui);
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 // powered_by_egui_and_eframe(ui);

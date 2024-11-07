@@ -1,6 +1,7 @@
 use egui::ColorImage;
 
 use crate::pdf::PdfRenderer;
+use crate::video::VideoPlayer;
 use std::collections::HashMap;
 
 struct ImageState {
@@ -24,6 +25,8 @@ pub struct SlidesCache {
     needs_redraw: bool,
 
     rendered_slides: HashMap<usize, (ColorImage, ImageState)>,
+
+    video_player: VideoPlayer,
 }
 
 impl SlidesCache {
@@ -35,6 +38,7 @@ impl SlidesCache {
             current_page_idx: 0,
             needs_redraw: true,
             rendered_slides: HashMap::default(),
+            video_player: VideoPlayer::new(),
         }
     }
 
@@ -89,6 +93,43 @@ impl SlidesCache {
             // update (no img available)
             None => self.update_img(),
         }
+    }
+
+    pub fn handle_video(&mut self, page_idx: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let video_path_01 = "./test.mp4";
+        let video_path_02 = "./test_large.mp4";
+        let video_path_03 = "./test.gif";
+        // video => slide number matching
+        match page_idx {
+            0 | 1 | 2 | 3 | 6 | 7 => {
+                // do not restart video if it is already playing
+                // (videos can generally be spread over multiple slides)
+                if !self.video_player.is_path_playing(video_path_01) {
+                    self.video_player.init(ctx, &video_path_01);
+                    self.video_player.start();
+                }
+            }
+            4 => {
+                if !self.video_player.is_path_playing(video_path_02) {
+                    self.video_player.init(ctx, &video_path_02);
+                    self.video_player.start();
+                }
+            }
+            9 | 10 => {
+                if !self.video_player.is_path_playing(video_path_03) {
+                    self.video_player.init(ctx, &video_path_03);
+                    self.video_player.start();
+                }
+            }
+            _ => self.video_player.destroy(),
+        }
+
+        let rect = egui::Rect {
+            min: egui::pos2(200.0, 300.0),
+            max: egui::pos2(600.0, 800.0),
+        };
+        self.video_player.render(ui, rect);
+        println!("{:?}", self.video_player.size())
     }
 }
 
