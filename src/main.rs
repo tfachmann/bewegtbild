@@ -1,10 +1,35 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
+use bewegtbild::Config;
+use clap::Parser;
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[clap(help = "PDF file to view")]
+    pdf_path: PathBuf,
+
+    #[clap(short, long, help = "Configuration file with video annotations")]
+    config: Option<PathBuf>,
+}
+
 // When compiling natively:
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
+    let args = Args::parse();
+    let pdf_path = args.pdf_path;
+    let config = match args.config {
+        Some(config_path) => serde_json::from_str(
+            &fs::read_to_string(config_path).expect("Could not read config file."),
+        )
+        .expect("The format of the config file is wrong."),
+        None => Config::default(),
+    };
+    println!("{:?}", config);
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -20,7 +45,13 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "bewegtbild",
         native_options,
-        Box::new(|cc| Ok(Box::new(bewegtbild::TemplateApp::new(cc)))),
+        Box::new(|cc| {
+            Ok(Box::new(bewegtbild::TemplateApp::new(
+                cc,
+                pdf_path,
+                config.slides_map(),
+            )))
+        }),
     )
 }
 

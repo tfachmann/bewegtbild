@@ -25,6 +25,8 @@ serde = { version = "1", features = ["derive"] }
 image = "0.25.4"
 pdfium-render = "0.8.25"
 egui-video = { path = "../egui-video/" }
+clap = { version = "4.5.20", features = ["derive"] }
+serde_json = "1.0.132"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

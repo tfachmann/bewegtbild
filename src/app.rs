@@ -1,10 +1,13 @@
+use std::path::PathBuf;
+
 use egui::{ColorImage, TextureHandle};
-use egui_video::Player;
 use pdfium_render::prelude::PdfRenderConfig;
+use std::collections::HashMap;
 
 use crate::{
     pdf::PdfRenderer,
     slides::{Slides, SlidesCache},
+    VideoEntry,
 };
 
 fn is_num(key: &egui::Key) -> bool {
@@ -50,18 +53,21 @@ pub struct TemplateApp {
     requested_page_idx: usize,
 
     key_stack: Vec<egui::Key>,
-    player: Option<Player>,
 }
 
 impl TemplateApp {
     /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        pdf_path: PathBuf,
+        video_map: HashMap<usize, Vec<VideoEntry>>,
+    ) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-        let pdf_renderer = PdfRenderer::new(PdfRenderConfig::new(), "./test.pdf".into());
+        let pdf_renderer = PdfRenderer::new(PdfRenderConfig::new(), pdf_path);
 
         Self {
-            slides: SlidesCache::new(Slides::new(pdf_renderer), 100, 100),
+            slides: SlidesCache::new(Slides::new(pdf_renderer), 100, 100, video_map),
             texture: cc.egui_ctx.load_texture(
                 "slides_page",
                 ColorImage::example(),
@@ -69,7 +75,6 @@ impl TemplateApp {
             ),
             requested_page_idx: 0,
             key_stack: Vec::new(),
-            player: None,
         }
     }
 

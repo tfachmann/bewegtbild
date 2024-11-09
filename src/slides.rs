@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use egui::ColorImage;
 
 use crate::pdf::PdfRenderer;
 use crate::video::VideoPlayer;
-use std::collections::HashMap;
+use crate::VideoEntry;
 
 struct ImageState {
     needs_redraw: bool,
@@ -16,6 +18,8 @@ impl Default for ImageState {
     }
 }
 
+type VideoMap = HashMap<usize, Vec<VideoEntry>>;
+
 pub struct SlidesCache {
     slides: Slides,
     window_width: i32,
@@ -26,11 +30,12 @@ pub struct SlidesCache {
 
     rendered_slides: HashMap<usize, (ColorImage, ImageState)>,
 
+    video_map: VideoMap,
     video_player: VideoPlayer,
 }
 
 impl SlidesCache {
-    pub fn new(slides: Slides, window_width: i32, window_height: i32) -> Self {
+    pub fn new(slides: Slides, window_width: i32, window_height: i32, video_map: VideoMap) -> Self {
         Self {
             slides,
             window_width,
@@ -38,6 +43,7 @@ impl SlidesCache {
             current_page_idx: 0,
             needs_redraw: true,
             rendered_slides: HashMap::default(),
+            video_map,
             video_player: VideoPlayer::new(),
         }
     }
@@ -96,40 +102,38 @@ impl SlidesCache {
     }
 
     pub fn handle_video(&mut self, page_idx: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
-        let video_path_01 = "./test.mp4";
-        let video_path_02 = "./test_large.mp4";
-        let video_path_03 = "./test.gif";
-        // video => slide number matching
-        match page_idx {
-            0 | 1 | 2 | 3 | 6 | 7 => {
-                // do not restart video if it is already playing
-                // (videos can generally be spread over multiple slides)
-                if !self.video_player.is_path_playing(video_path_01) {
-                    self.video_player.init(ctx, &video_path_01);
-                    self.video_player.start();
-                }
+        // slide number => video matching
+        if let Some(video_entries) = self.video_map.get(&page_idx) {
+            let video_entry = &video_entries[0];
+            // do not restart the video if it is already playing
+            // (videos can generally be spread over multiple slides)
+            let video_str = video_entry.video_path.to_str().unwrap();
+            if !self.video_player.is_path_playing(video_str) {
+                // init the video if it is not yet playing
+                self.video_player.init(ctx, video_str);
+                self.video_player.start();
             }
-            4 => {
-                if !self.video_player.is_path_playing(video_path_02) {
-                    self.video_player.init(ctx, &video_path_02);
-                    self.video_player.start();
-                }
-            }
-            9 | 10 => {
-                if !self.video_player.is_path_playing(video_path_03) {
-                    self.video_player.init(ctx, &video_path_03);
-                    self.video_player.start();
-                }
-            }
-            _ => self.video_player.destroy(),
+            // calculate rect and render it
+            let scaled_pos = video_entry
+                .pos
+                .by_bbox((self.window_width as f32, self.window_height as f32));
+            let scaled_pos = egui::pos2(scaled_pos.0, scaled_pos.1);
+            let scaled_size = video_entry
+                .size
+                .by_bbox((self.window_width as f32, self.window_height as f32));
+            let scaled_size = egui::vec2(scaled_size.0, scaled_size.1);
+            println!("pos: {:?}, size: {:?}", scaled_pos, scaled_size);
+            let rect = egui::Rect {
+                min: scaled_pos,
+                max: scaled_pos + scaled_size,
+            };
+            // render to ui
+            self.video_player.render(ui, rect);
+        } else {
+            // no video should be playing
+            self.video_player.destroy();
         }
-
-        let rect = egui::Rect {
-            min: egui::pos2(200.0, 300.0),
-            max: egui::pos2(600.0, 800.0),
-        };
-        self.video_player.render(ui, rect);
-        println!("{:?}", self.video_player.size())
+        // println!("{:?}", self.video_player.size())
     }
 }
 
