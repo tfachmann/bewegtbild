@@ -176,13 +176,17 @@ impl eframe::App for TemplateApp {
                 self.texture.set(img, Default::default());
             }
 
-            let size = self.texture.size_vec2();
-            let sized_texture = egui::load::SizedTexture::new(self.texture.id(), size);
-            ui.with_layout(
-                egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                |ui| ui.add(egui::Image::new(sized_texture).fit_to_exact_size(size)),
+            let slide_size = self.texture.size_vec2();
+            let sized_texture = egui::load::SizedTexture::new(self.texture.id(), slide_size);
+            let available_rect = ui.available_rect_before_wrap();
+            let slide_pos = available_rect.center() - 0.5 * slide_size;
+            let img_rect = egui::Rect::from_min_size(slide_pos, slide_size);
+            ui.put(
+                img_rect,
+                egui::Image::new(sized_texture).fit_to_exact_size(slide_size),
             );
-            self.slides.handle_video(self.requested_page_idx, ctx, ui);
+            self.slides
+                .handle_video(self.requested_page_idx, slide_pos, slide_size, ctx, ui);
 
             ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
                 // powered_by_egui_and_eframe(ui);

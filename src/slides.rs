@@ -101,7 +101,17 @@ impl SlidesCache {
         }
     }
 
-    pub fn handle_video(&mut self, page_idx: usize, ctx: &egui::Context, ui: &mut egui::Ui) {
+    /// Handles the rendering of the videos of this slide to the given context and ui.
+    ///
+    /// Needs position and size of the slides to render the videos.
+    pub fn handle_video(
+        &mut self,
+        page_idx: usize,
+        slide_pos: egui::Pos2,
+        slide_size: egui::Vec2,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+    ) {
         // slide number => video matching
         if let Some(video_entries) = self.video_map.get(&page_idx) {
             let video_entry = &video_entries[0];
@@ -114,18 +124,16 @@ impl SlidesCache {
                 self.video_player.start();
             }
             // calculate rect and render it
-            let scaled_pos = video_entry
-                .pos
-                .by_bbox((self.window_width as f32, self.window_height as f32));
-            let scaled_pos = egui::pos2(scaled_pos.0, scaled_pos.1);
-            let scaled_size = video_entry
-                .size
-                .by_bbox((self.window_width as f32, self.window_height as f32));
+            let slide_size = (slide_size.x, slide_size.y);
+            let scaled_pos = video_entry.pos.by_bbox(slide_size);
+            let scaled_pos = egui::vec2(scaled_pos.0, scaled_pos.1);
+            let video_dim = self.video_player.size().unwrap();
+            let video_dim = (video_dim.x, video_dim.y);
+            let scaled_size = video_entry.size.by_bbox(video_dim, slide_size);
             let scaled_size = egui::vec2(scaled_size.0, scaled_size.1);
-            println!("pos: {:?}, size: {:?}", scaled_pos, scaled_size);
             let rect = egui::Rect {
-                min: scaled_pos,
-                max: scaled_pos + scaled_size,
+                min: slide_pos + scaled_pos,
+                max: slide_pos + scaled_pos + scaled_size,
             };
             // render to ui
             self.video_player.render(ui, rect);
@@ -133,7 +141,6 @@ impl SlidesCache {
             // no video should be playing
             self.video_player.destroy();
         }
-        // println!("{:?}", self.video_player.size())
     }
 }
 

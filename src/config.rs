@@ -2,10 +2,18 @@ use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{SizeEntry, SizeRequest, VideoEntry};
+use crate::{PosRequest, SizeEntry, SizeRequest, VideoEntry};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
+/// TODO: Questionalable configuration.
+/// Maybe explicit `width` and `height` could be preferred...
+///   ```yaml
+///    size:
+///     width: 30%
+///     height: auto
+///   ```
+///
 enum SizeRequestConfig {
     Width(SizeEntry),
     WidthTuple((SizeEntry,)),
@@ -15,19 +23,19 @@ enum SizeRequestConfig {
 impl SizeRequestConfig {
     fn as_size_request(self) -> SizeRequest {
         match self {
-            SizeRequestConfig::Width(w) => SizeRequest {
-                width: w,
-                height: w,
-            },
-            SizeRequestConfig::WidthTuple((w,)) => SizeRequest {
-                width: w,
-                height: w,
-            },
-            SizeRequestConfig::WidthAndHeight(w, h) => SizeRequest {
-                width: w,
-                height: h,
-            },
+            SizeRequestConfig::Width(w) => SizeRequest::AutoHeight(w),
+            SizeRequestConfig::WidthTuple((w,)) => SizeRequest::AutoHeight(w),
+            SizeRequestConfig::WidthAndHeight(w, h) => SizeRequest::Size(w, h),
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PosRequestConfig(SizeEntry, SizeEntry);
+
+impl Default for PosRequestConfig {
+    fn default() -> Self {
+        PosRequestConfig(SizeEntry::Percent(0), SizeEntry::Percent(0))
     }
 }
 
@@ -35,7 +43,8 @@ impl SizeRequestConfig {
 struct VideoConfig {
     slide_num: usize,
     video_path: PathBuf,
-    pos: (SizeEntry, SizeEntry),
+    #[serde(default)]
+    pos: PosRequestConfig,
     size: SizeRequestConfig,
 }
 
@@ -51,7 +60,7 @@ impl Config {
             .fold(HashMap::new(), |mut acc, entry| {
                 acc.entry(entry.slide_num).or_default().push(VideoEntry {
                     video_path: entry.video_path,
-                    pos: SizeRequest {
+                    pos: PosRequest {
                         width: entry.pos.0,
                         height: entry.pos.1,
                     },

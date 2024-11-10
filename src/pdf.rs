@@ -3,27 +3,6 @@ use std::{fs, path::PathBuf};
 use egui::ColorImage;
 use image::DynamicImage;
 use pdfium_render::prelude::*;
-// use slint::{Rgba8Pixel, SharedPixelBuffer};
-
-// fn dynamic_image_to_buffer(
-//     dynamic_image: image::DynamicImage,
-// ) -> slint::SharedPixelBuffer<Rgba8Pixel> {
-//     if dynamic_image.color().has_alpha() {
-//         let rgba8image = dynamic_image.to_rgba8();
-//         SharedPixelBuffer::clone_from_slice(
-//             rgba8image.as_raw(),
-//             rgba8image.width(),
-//             rgba8image.height(),
-//         )
-//     } else {
-//         let rgb8image = dynamic_image.to_rgb8();
-//         SharedPixelBuffer::clone_from_slice(
-//             rgb8image.as_raw(),
-//             rgb8image.width(),
-//             rgb8image.height(),
-//         )
-//     }
-// }
 
 pub struct PdfRenderer {
     /// Instance to pdf rendering
@@ -108,17 +87,10 @@ impl PdfRenderer {
 
     pub fn render_page(&self, page_idx: usize) -> Option<ColorImage> {
         println!("Rendering Page {}", page_idx);
-        // self.image_by_page(page_idx)
         let rgba_image = self.image_by_page(page_idx)?.to_rgba8();
         let size = [rgba_image.width() as usize, rgba_image.height() as usize];
         let color_image =
             ColorImage::from_rgba_unmultiplied(size, rgba_image.as_flat_samples().as_slice());
         Some(color_image)
     }
-    // Renders the page at the given index.
-    // pub fn render_page(&self, page_idx: usize) -> Option<slint::Image> {
-    //     let image = self.image_by_page(page_idx)?;
-    //     let buffer = dynamic_image_to_buffer(image.clone());
-    //     Some(slint::Image::from_rgba8_premultiplied(buffer))
-    // }
 }
