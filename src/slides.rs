@@ -65,6 +65,10 @@ impl SlidesCache {
         }
     }
 
+    pub fn change_video_map(&mut self, video_map: VideoMap) {
+        self.video_map = video_map;
+    }
+
     fn update_img(&mut self) -> Option<ColorImage> {
         let img_res =
             self.slides

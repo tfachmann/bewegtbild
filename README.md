@@ -10,10 +10,13 @@ A video playable PDF viewer built for presentations.
 
 ```sh
 # View a PDF
-bewegtbild test.pdf
+bewegtbild view test.pdf
 
 # View a PDF + video configuration when and where to play videos, GIFs, ...
-bewegtbild test.pdf -c ~/foo_config.json
+bewegtbild view test.pdf -c ~/foo_config.json
+
+# PDF + video configuration, updates when configuration changes (helps to write config)
+bewegtbild view test.pdf -c ~/foo_config.json
 ```
 
 Example configuration

@@ -9,6 +9,9 @@ rust-version = "1.79"
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
+#
+# [[bin]]
+# name = "bewegtbild-conf"
 
 [dependencies]
 # GUI related dependencies
@@ -31,6 +34,7 @@ egui-video = { git = "https://github.com/tfachmann/egui-video" }
 # argument parsing / config input
 clap = { version = "4.5.20", features = ["derive"] }
 serde_json = "1.0.132"
+notify = "7.0.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

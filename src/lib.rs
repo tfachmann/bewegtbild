@@ -34,7 +34,7 @@ impl PosRequest {
     pub fn by_bbox(&self, bbox_wh: (f32, f32)) -> (f32, f32) {
         (
             self.width.calc_size(bbox_wh.0),
-            self.width.calc_size(bbox_wh.1),
+            self.height.calc_size(bbox_wh.1),
         )
     }
 }

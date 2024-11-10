@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use egui::{ColorImage, TextureHandle};
 use pdfium_render::prelude::PdfRenderConfig;
 use std::collections::HashMap;
+use std::sync::mpsc;
 
 use crate::{
     pdf::PdfRenderer,
@@ -49,6 +50,7 @@ pub struct TemplateApp {
     // Example stuff:
     slides: SlidesCache,
     texture: TextureHandle,
+    config_changed_rx: Option<mpsc::Receiver<HashMap<usize, Vec<VideoEntry>>>>,
 
     requested_page_idx: usize,
 
@@ -61,6 +63,7 @@ impl TemplateApp {
         cc: &eframe::CreationContext<'_>,
         pdf_path: PathBuf,
         video_map: HashMap<usize, Vec<VideoEntry>>,
+        config_changed_rx: Option<mpsc::Receiver<HashMap<usize, Vec<VideoEntry>>>>,
     ) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -75,6 +78,7 @@ impl TemplateApp {
             ),
             requested_page_idx: 0,
             key_stack: Vec::new(),
+            config_changed_rx,
         }
     }
 
@@ -166,6 +170,15 @@ impl eframe::App for TemplateApp {
                     }
                 }
             });
+
+            if let Some(config_changed_rx) = &self.config_changed_rx {
+                if let Ok(new_video_map) = config_changed_rx.try_recv() {
+                    println!("Config changed from UI");
+                    self.slides.change_video_map(new_video_map);
+                }
+                // necessary to register changes to the config
+                ctx.request_repaint();
+            }
 
             let size = ctx.input(|i: &egui::InputState| i.screen_rect());
             let width = size.max.x;
