@@ -40,8 +40,25 @@ impl Default for PosRequestConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+enum SlideNumConfig {
+    Single(usize),
+    Many(Vec<usize>),
+}
+
+impl SlideNumConfig {
+    fn as_vec(self) -> Vec<usize> {
+        match self {
+            SlideNumConfig::Single(num) => vec![num],
+            SlideNumConfig::Many(vec) => vec,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct VideoConfig {
-    slide_num: usize,
+    #[serde(rename = "slide_num")]
+    slide_nums: SlideNumConfig,
     video_path: PathBuf,
     #[serde(default)]
     pos: PosRequestConfig,
@@ -58,14 +75,16 @@ impl Config {
         self.entries
             .into_iter()
             .fold(HashMap::new(), |mut acc, entry| {
-                acc.entry(entry.slide_num).or_default().push(VideoEntry {
-                    video_path: entry.video_path,
-                    pos: PosRequest {
-                        width: entry.pos.0,
-                        height: entry.pos.1,
-                    },
-                    size: entry.size.as_size_request(),
-                });
+                for slide_num in entry.slide_nums.as_vec() {
+                    acc.entry(slide_num).or_default().push(VideoEntry {
+                        video_path: entry.video_path.clone(),
+                        pos: PosRequest {
+                            width: entry.pos.0,
+                            height: entry.pos.1,
+                        },
+                        size: entry.size.as_size_request(),
+                    });
+                }
                 acc
             })
     }
