@@ -31,11 +31,16 @@ pub struct SlidesCache {
     rendered_slides: HashMap<usize, (ColorImage, ImageState)>,
 
     video_map: VideoMap,
-    video_player: VideoPlayer,
+    video_players: Vec<VideoPlayer>,
 }
 
 impl SlidesCache {
     pub fn new(slides: Slides, window_width: i32, window_height: i32, video_map: VideoMap) -> Self {
+        let max_video_per_slide = video_map.values().map(|val| val.len()).max();
+        let video_players = match max_video_per_slide {
+            None => vec![],
+            Some(num) => (0..num).map(|_| VideoPlayer::new()).collect(),
+        };
         Self {
             slides,
             window_width,
@@ -44,7 +49,7 @@ impl SlidesCache {
             needs_redraw: true,
             rendered_slides: HashMap::default(),
             video_map,
-            video_player: VideoPlayer::new(),
+            video_players,
         }
     }
 
@@ -118,32 +123,36 @@ impl SlidesCache {
     ) {
         // slide number => video matching
         if let Some(video_entries) = self.video_map.get(&page_idx) {
-            let video_entry = &video_entries[0];
-            // do not restart the video if it is already playing
-            // (videos can generally be spread over multiple slides)
-            let video_str = video_entry.video_path.to_str().unwrap();
-            if !self.video_player.is_path_playing(video_str) {
-                // init the video if it is not yet playing
-                self.video_player.init(ctx, video_str);
-                self.video_player.start();
+            for (video_entry, video_player) in video_entries.iter().zip(&mut self.video_players) {
+                // do not restart the video if it is already playing
+                // (videos can generally be spread over multiple slides)
+                let video_str = video_entry.video_path.to_str().unwrap();
+                if !video_player.is_path_playing(video_str) {
+                    // init the video if it is not yet playing
+                    video_player.init(ctx, video_str);
+                    video_player.start();
+                }
+                // calculate rect and render it
+                let slide_size = (slide_size.x, slide_size.y);
+                let scaled_pos = video_entry.pos.by_bbox(slide_size);
+                let scaled_pos = egui::vec2(scaled_pos.0, scaled_pos.1);
+                let video_dim = video_player.size().unwrap();
+                let video_dim = (video_dim.x, video_dim.y);
+                let scaled_size = video_entry.size.by_bbox(video_dim, slide_size);
+                let scaled_size = egui::vec2(scaled_size.0, scaled_size.1);
+                let rect = egui::Rect {
+                    min: slide_pos + scaled_pos,
+                    max: slide_pos + scaled_pos + scaled_size,
+                };
+                // render to ui
+                video_player.render(ui, rect);
             }
-            // calculate rect and render it
-            let slide_size = (slide_size.x, slide_size.y);
-            let scaled_pos = video_entry.pos.by_bbox(slide_size);
-            let scaled_pos = egui::vec2(scaled_pos.0, scaled_pos.1);
-            let video_dim = self.video_player.size().unwrap();
-            let video_dim = (video_dim.x, video_dim.y);
-            let scaled_size = video_entry.size.by_bbox(video_dim, slide_size);
-            let scaled_size = egui::vec2(scaled_size.0, scaled_size.1);
-            let rect = egui::Rect {
-                min: slide_pos + scaled_pos,
-                max: slide_pos + scaled_pos + scaled_size,
-            };
-            // render to ui
-            self.video_player.render(ui, rect);
+            // TODO: How to destroy the player when going from two videos => one video
         } else {
             // no video should be playing
-            self.video_player.destroy();
+            self.video_players
+                .iter_mut()
+                .for_each(|player| player.destroy());
         }
     }
 }

@@ -39,6 +39,7 @@ enum Commands {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     use bewegtbild::VideoEntry;
+    use egui::debug_text::print;
     use notify::event::ModifyKind;
     use std::{collections::HashMap, sync::mpsc};
 
@@ -78,10 +79,11 @@ fn main() -> eframe::Result {
                                             &fs::read_to_string(config_path_abs.clone())
                                                 .expect("Could not read config file."),
                                         );
-                                    if let Ok(config) = config {
-                                        ui_tx.send(config.slides_map()).unwrap();
+                                    match config {
+                                        Ok(config) => ui_tx.send(config.slides_map()).unwrap(),
+                                        // TODO: add color, make it pretty?
+                                        Err(e) => println!("{}", e),
                                     }
-                                    //.expect("The format of the config file is wrong.");
                                 }
                             }
                         }

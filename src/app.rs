@@ -171,6 +171,7 @@ impl eframe::App for TemplateApp {
                 }
             });
 
+            // handle config changes (for the `config` command)
             if let Some(config_changed_rx) = &self.config_changed_rx {
                 if let Ok(new_video_map) = config_changed_rx.try_recv() {
                     println!("Config changed from UI");
