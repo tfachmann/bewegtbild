@@ -47,10 +47,10 @@ enum SlideNumConfig {
 }
 
 impl SlideNumConfig {
-    fn as_vec(self) -> Vec<usize> {
+    fn as_vec(&self) -> Vec<usize> {
         match self {
-            SlideNumConfig::Single(num) => vec![num],
-            SlideNumConfig::Many(vec) => vec,
+            SlideNumConfig::Single(num) => vec![*num],
+            SlideNumConfig::Many(vec) => vec.clone(),
         }
     }
 }
@@ -67,7 +67,7 @@ struct VideoConfig {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
-    entries: Vec<VideoConfig>,
+    pub entries: Vec<VideoConfig>,
 }
 
 impl Config {
@@ -77,6 +77,7 @@ impl Config {
             .fold(HashMap::new(), |mut acc, entry| {
                 for slide_num in entry.slide_nums.as_vec() {
                     acc.entry(slide_num).or_default().push(VideoEntry {
+                        slide_nums: entry.slide_nums.as_vec(),
                         video_path: entry.video_path.clone(),
                         pos: PosRequest {
                             width: entry.pos.0,
@@ -87,6 +88,21 @@ impl Config {
                 }
                 acc
             })
+    }
+
+    pub fn video_entries(self) -> Vec<VideoEntry> {
+        self.entries
+            .into_iter()
+            .map(|entry| VideoEntry {
+                slide_nums: entry.slide_nums.as_vec(),
+                video_path: entry.video_path,
+                pos: PosRequest {
+                    width: entry.pos.0,
+                    height: entry.pos.1,
+                },
+                size: entry.size.as_size_request(),
+            })
+            .collect()
     }
 }
 

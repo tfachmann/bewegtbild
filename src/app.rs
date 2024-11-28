@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use egui::{ColorImage, TextureHandle};
 use pdfium_render::prelude::PdfRenderConfig;
-use std::collections::HashMap;
 use std::sync::mpsc;
 
 use crate::{
@@ -50,7 +49,7 @@ pub struct TemplateApp {
     // Example stuff:
     slides: SlidesCache,
     texture: TextureHandle,
-    config_changed_rx: Option<mpsc::Receiver<HashMap<usize, Vec<VideoEntry>>>>,
+    config_changed_rx: Option<mpsc::Receiver<Vec<VideoEntry>>>,
 
     requested_page_idx: usize,
 
@@ -62,15 +61,15 @@ impl TemplateApp {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         pdf_path: PathBuf,
-        video_map: HashMap<usize, Vec<VideoEntry>>,
-        config_changed_rx: Option<mpsc::Receiver<HashMap<usize, Vec<VideoEntry>>>>,
+        config: Vec<VideoEntry>,
+        config_changed_rx: Option<mpsc::Receiver<Vec<VideoEntry>>>,
     ) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         let pdf_renderer = PdfRenderer::new(PdfRenderConfig::new(), pdf_path);
 
         Self {
-            slides: SlidesCache::new(Slides::new(pdf_renderer), 100, 100, video_map),
+            slides: SlidesCache::new(Slides::new(pdf_renderer), 100, 100, config),
             texture: cc.egui_ctx.load_texture(
                 "slides_page",
                 ColorImage::example(),
@@ -173,9 +172,9 @@ impl eframe::App for TemplateApp {
 
             // handle config changes (for the `config` command)
             if let Some(config_changed_rx) = &self.config_changed_rx {
-                if let Ok(new_video_map) = config_changed_rx.try_recv() {
+                if let Ok(new_video_config) = config_changed_rx.try_recv() {
                     println!("Config changed from UI");
-                    self.slides.change_video_map(new_video_map);
+                    self.slides.change_video_entries(new_video_config);
                 }
                 // necessary to register changes to the config
                 ctx.request_repaint();

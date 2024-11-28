@@ -39,9 +39,8 @@ enum Commands {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
     use bewegtbild::VideoEntry;
-    use egui::debug_text::print;
     use notify::event::ModifyKind;
-    use std::{collections::HashMap, sync::mpsc};
+    use std::sync::mpsc;
 
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let args = Args::parse();
@@ -52,7 +51,7 @@ fn main() -> eframe::Result {
         } => {
             let config_path_abs = std::path::absolute(config_path.clone()).unwrap();
             let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
-            let (ui_tx, ui_rx) = mpsc::channel::<HashMap<usize, Vec<VideoEntry>>>();
+            let (ui_tx, ui_rx) = mpsc::channel::<Vec<VideoEntry>>();
 
             let config_path_abs = config_path_abs.clone();
             thread::spawn(move || {
@@ -80,7 +79,7 @@ fn main() -> eframe::Result {
                                                 .expect("Could not read config file."),
                                         );
                                     match config {
-                                        Ok(config) => ui_tx.send(config.slides_map()).unwrap(),
+                                        Ok(config) => ui_tx.send(config.video_entries()).unwrap(),
                                         // TODO: add color, make it pretty?
                                         Err(e) => println!("{}", e),
                                     }
@@ -118,7 +117,7 @@ fn main() -> eframe::Result {
                     Ok(Box::new(bewegtbild::TemplateApp::new(
                         cc,
                         pdf_path,
-                        config.slides_map(),
+                        config.video_entries(),
                         Some(ui_rx),
                     )))
                 }),
@@ -155,7 +154,7 @@ fn main() -> eframe::Result {
                     Ok(Box::new(bewegtbild::TemplateApp::new(
                         cc,
                         pdf_path,
-                        config.slides_map(),
+                        config.video_entries(),
                         None,
                     )))
                 }),

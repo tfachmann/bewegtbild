@@ -43,6 +43,10 @@ impl VideoPlayer {
         }
     }
 
+    pub fn is_playing(&self) -> bool {
+        self.video.is_some()
+    }
+
     pub fn is_path_playing(&self, video_path: &str) -> bool {
         self.video
             .as_ref()

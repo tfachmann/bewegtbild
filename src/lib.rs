@@ -75,8 +75,9 @@ impl Default for SizeRequest {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VideoEntry {
+    pub slide_nums: Vec<usize>,
     pub video_path: PathBuf,
     // TODO: pos should _not_ be of type SizeRequest
     pub pos: PosRequest,
