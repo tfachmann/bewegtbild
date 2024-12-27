@@ -6,16 +6,9 @@ use crate::pdf::PdfRenderer;
 use crate::video::VideoPlayer;
 use crate::VideoEntry;
 
+#[derive(Default)]
 struct ImageState {
     needs_redraw: bool,
-}
-
-impl Default for ImageState {
-    fn default() -> Self {
-        ImageState {
-            needs_redraw: false,
-        }
-    }
 }
 
 pub struct SlidesCache {

@@ -12,19 +12,19 @@ use crate::{
 
 fn is_num(key: &egui::Key) -> bool {
     use egui::Key;
-    match key {
+    matches!(
+        key,
         Key::Num0
-        | Key::Num1
-        | Key::Num2
-        | Key::Num3
-        | Key::Num4
-        | Key::Num5
-        | Key::Num6
-        | Key::Num7
-        | Key::Num8
-        | Key::Num9 => true,
-        _ => false,
-    }
+            | Key::Num1
+            | Key::Num2
+            | Key::Num3
+            | Key::Num4
+            | Key::Num5
+            | Key::Num6
+            | Key::Num7
+            | Key::Num8
+            | Key::Num9
+    )
 }
 
 fn key_to_num(key: &egui::Key) -> Option<usize> {
@@ -82,7 +82,7 @@ impl TemplateApp {
     }
 
     fn stack_as_num(&self) -> Option<usize> {
-        if self.key_stack.is_empty() || !self.key_stack.iter().all(|key| is_num(key)) {
+        if self.key_stack.is_empty() || !self.key_stack.iter().all(is_num) {
             None
         } else {
             Some(
@@ -101,14 +101,13 @@ impl eframe::App for TemplateApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             ctx.input(|i| {
                 // next slide
-                if i.key_pressed(egui::Key::ArrowRight)
+                if (i.key_pressed(egui::Key::ArrowRight)
                     || i.key_pressed(egui::Key::L)
                     || i.key_pressed(egui::Key::N)
-                    || i.key_pressed(egui::Key::Space)
+                    || i.key_pressed(egui::Key::Space))
+                    && self.requested_page_idx < self.slides.num_pages() - 1
                 {
-                    if self.requested_page_idx < self.slides.num_pages() - 1 {
-                        self.requested_page_idx += 1;
-                    }
+                    self.requested_page_idx += 1;
                 }
                 // previous slide
                 if i.key_pressed(egui::Key::ArrowLeft)
@@ -165,7 +164,7 @@ impl eframe::App for TemplateApp {
                         }
                     });
                     if let Some(key) = pressed_key {
-                        self.key_stack.push(key.clone())
+                        self.key_stack.push(*key)
                     }
                 }
             });

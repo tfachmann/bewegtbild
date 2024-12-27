@@ -59,7 +59,7 @@ fn main() -> eframe::Result {
                     notify::recommended_watcher(tx).expect("Failed to create watcher");
                 watcher
                     .watch(
-                        &config_path_abs.parent().unwrap(),
+                        config_path_abs.parent().unwrap(),
                         RecursiveMode::NonRecursive,
                     )
                     .expect("Failed to watch file");
@@ -90,7 +90,6 @@ fn main() -> eframe::Result {
                     }
                 }
             });
-            let pdf_path = pdf_path;
             let config: Config = serde_json::from_str(
                 &fs::read_to_string(config_path).expect("Could not read config file."),
             )
@@ -124,7 +123,6 @@ fn main() -> eframe::Result {
             )
         }
         Commands::View { pdf_path, config } => {
-            let pdf_path = pdf_path;
             let config = match config {
                 Some(config_path) => serde_json::from_str(
                     &fs::read_to_string(config_path).expect("Could not read config file."),

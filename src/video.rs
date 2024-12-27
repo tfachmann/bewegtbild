@@ -58,10 +58,6 @@ impl VideoPlayer {
     }
 
     pub fn size(&self) -> Option<egui::Vec2> {
-        if let Some(video) = self.video.as_ref() {
-            Some(video.player.size)
-        } else {
-            None
-        }
+        self.video.as_ref().map(|video| video.player.size)
     }
 }
