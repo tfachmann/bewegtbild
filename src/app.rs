@@ -100,11 +100,13 @@ impl eframe::App for TemplateApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ctx.input(|i| {
+                // println!("{:?}", i.keys_down);
                 // next slide
                 if (i.key_pressed(egui::Key::ArrowRight)
                     || i.key_pressed(egui::Key::L)
                     || i.key_pressed(egui::Key::N)
-                    || i.key_pressed(egui::Key::Space))
+                    || i.key_pressed(egui::Key::Space)
+                    || i.key_pressed(egui::Key::PageDown))
                     && self.requested_page_idx < self.slides.num_pages() - 1
                 {
                     self.requested_page_idx += 1;
@@ -113,6 +115,7 @@ impl eframe::App for TemplateApp {
                 if i.key_pressed(egui::Key::ArrowLeft)
                     || i.key_pressed(egui::Key::H)
                     || i.key_pressed(egui::Key::P)
+                    || i.key_pressed(egui::Key::PageUp)
                 {
                     self.requested_page_idx = self.requested_page_idx.saturating_sub(1);
                 }
