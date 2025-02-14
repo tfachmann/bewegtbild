@@ -15,12 +15,13 @@ targets = ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown"]
 
 [dependencies]
 # GUI related dependencies
-egui = "0.29"
-eframe = { version = "0.29", default-features = false, features = [
+egui = "0.31"
+eframe = { version = "0.31", default-features = false, features = [
   "accesskit",     # Make egui compatible with screen readers. NOTE: adds a lot of dependencies.
   "default_fonts", # Embed the default egui fonts.
   "glow",          # Use the glow rendering backend. Alternative: "wgpu".
   "persistence",   # Enable restoring app state when restarting the app.
+  "wayland",
 ] }
 log = "0.4"
 
@@ -28,13 +29,13 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 # dependencies to render slides / pdf
 image = "0.25.4"
-pdfium-render = "0.8.25"
+pdfium-render = { version = "0.8", features = [] }
 # dependencies to render videos
 egui-video = { git = "https://github.com/tfachmann/egui-video" }
 # argument parsing / config input
 clap = { version = "4.5.20", features = ["derive"] }
 serde_json = "1.0.132"
-notify = "7.0.0"
+notify = "8.0.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
