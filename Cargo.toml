@@ -29,13 +29,17 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 # dependencies to render slides / pdf
 image = "0.25.4"
-pdfium-render = { version = "0.8", features = [] }
+pdfium-render = { version = "=0.8.22" }
 # dependencies to render videos
 egui-video = { git = "https://github.com/tfachmann/egui-video" }
 # argument parsing / config input
 clap = { version = "4.5.20", features = ["derive"] }
 serde_json = "1.0.132"
 notify = "8.0.0"
+
+[features]
+default = []
+static = ["pdfium-render/static", "pdfium-render/libc++"]
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

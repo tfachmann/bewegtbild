@@ -31,11 +31,14 @@ fn load_and_calc_pages(pdfium: &Pdfium, path: &PathBuf) -> (Vec<u8>, usize) {
 
 impl PdfRenderer {
     pub fn new(render_config: PdfRenderConfig, pdf_path: PathBuf) -> Self {
+        #[cfg(not(feature = "static"))]
         let pdfium = Pdfium::new(
             Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
                 .or_else(|_| Pdfium::bind_to_system_library())
                 .expect("Could not access Pdfium bindings."),
         );
+        #[cfg(feature = "static")]
+        let pdfium = Pdfium::new(Pdfium::bind_to_statically_linked_library().unwrap());
         println!("Loading PDF document...");
         let (document_bytes, num_pages) = load_and_calc_pages(&pdfium, &pdf_path);
 
