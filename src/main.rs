@@ -2,7 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
 use bewegtbild::Config;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use notify::{Event, RecursiveMode, Watcher};
 use std::fs;
 use std::path::PathBuf;
@@ -11,28 +11,14 @@ use std::thread;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[command(subcommand)]
-    cmd: Commands,
-}
+    #[clap(help = "PDF file to view")]
+    pdf_path: PathBuf,
 
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Write your configuration file on the fly.
-    Config {
-        #[clap(help = "PDF file to view")]
-        pdf_path: PathBuf,
+    #[clap(short, long, help = "Configuration file with video annotations")]
+    config: Option<PathBuf>,
 
-        #[clap(short, long, help = "Configuration file with video annotations")]
-        config_path: PathBuf,
-    },
-    /// Start the presentation mode.
-    View {
-        #[clap(help = "PDF file to view")]
-        pdf_path: PathBuf,
-
-        #[clap(short, long, help = "Configuration file with video annotations")]
-        config: Option<PathBuf>,
-    },
+    #[clap(long, help = "Reload the configuration on change")]
+    reload: bool,
 }
 
 // When compiling natively:
@@ -44,16 +30,14 @@ fn main() -> eframe::Result {
 
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
     let args = Args::parse();
-    match args.cmd {
-        Commands::Config {
-            pdf_path,
-            config_path,
-        } => {
+    let mut ui_rx_opt = None;
+    if args.reload {
+        if let Some(config_path) = &args.config {
             let config_path_abs = std::path::absolute(config_path.clone()).unwrap();
             let (tx, rx) = mpsc::channel::<notify::Result<Event>>();
             let (ui_tx, ui_rx) = mpsc::channel::<Vec<VideoEntry>>();
+            ui_rx_opt = Some(ui_rx);
 
-            let config_path_abs = config_path_abs.clone();
             thread::spawn(move || {
                 let mut watcher =
                     notify::recommended_watcher(tx).expect("Failed to create watcher");
@@ -90,75 +74,39 @@ fn main() -> eframe::Result {
                     }
                 }
             });
-            let config: Config = serde_json::from_str(
-                &fs::read_to_string(config_path).expect("Could not read config file."),
-            )
-            .expect("The format of the config file is wrong.");
-            println!("{:?}", config);
-
-            let native_options = eframe::NativeOptions {
-                viewport: egui::ViewportBuilder::default()
-                    .with_inner_size([400.0, 300.0])
-                    .with_min_inner_size([300.0, 220.0])
-                    .with_icon(
-                        // NOTE: Adding an icon is optional
-                        eframe::icon_data::from_png_bytes(
-                            &include_bytes!("../assets/icon-256.png")[..],
-                        )
-                        .expect("Failed to load icon"),
-                    ),
-                ..Default::default()
-            };
-            eframe::run_native(
-                "bewegtbild",
-                native_options,
-                Box::new(|cc| {
-                    Ok(Box::new(bewegtbild::TemplateApp::new(
-                        cc,
-                        pdf_path,
-                        config.video_entries(),
-                        Some(ui_rx),
-                    )))
-                }),
-            )
-        }
-        Commands::View { pdf_path, config } => {
-            let config = match config {
-                Some(config_path) => serde_json::from_str(
-                    &fs::read_to_string(config_path).expect("Could not read config file."),
-                )
-                .expect("The format of the config file is wrong."),
-                None => Config::default(),
-            };
-            println!("{:?}", config);
-
-            let native_options = eframe::NativeOptions {
-                viewport: egui::ViewportBuilder::default()
-                    .with_inner_size([400.0, 300.0])
-                    .with_min_inner_size([300.0, 220.0])
-                    .with_icon(
-                        // NOTE: Adding an icon is optional
-                        eframe::icon_data::from_png_bytes(
-                            &include_bytes!("../assets/icon-256.png")[..],
-                        )
-                        .expect("Failed to load icon"),
-                    ),
-                ..Default::default()
-            };
-            eframe::run_native(
-                "bewegtbild",
-                native_options,
-                Box::new(|cc| {
-                    Ok(Box::new(bewegtbild::TemplateApp::new(
-                        cc,
-                        pdf_path,
-                        config.video_entries(),
-                        None,
-                    )))
-                }),
-            )
         }
     }
+    let config = match &args.config {
+        Some(config_path) => serde_json::from_str(
+            &fs::read_to_string(config_path).expect("Could not read config file."),
+        )
+        .expect("The format of the config file is wrong."),
+        None => Config::default(),
+    };
+
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([400.0, 300.0])
+            .with_min_inner_size([300.0, 220.0])
+            .with_icon(
+                // NOTE: Adding an icon is optional
+                eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
+                    .expect("Failed to load icon"),
+            ),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "bewegtbild",
+        native_options,
+        Box::new(|cc| {
+            Ok(Box::new(bewegtbild::TemplateApp::new(
+                cc,
+                args.pdf_path,
+                config.video_entries(),
+                ui_rx_opt,
+            )))
+        }),
+    )
 }
 
 // When compiling to web using trunk:

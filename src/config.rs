@@ -124,7 +124,7 @@ impl<'de> Deserialize<'de> for SizeEntry {
     {
         struct SizeEntryVisitor;
 
-        impl<'de> serde::de::Visitor<'de> for SizeEntryVisitor {
+        impl serde::de::Visitor<'_> for SizeEntryVisitor {
             type Value = SizeEntry;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
