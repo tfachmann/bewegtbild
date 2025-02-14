@@ -11,20 +11,20 @@ mod pdf;
 mod slides;
 mod video;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SizeEntry {
-    Percent(usize),
+    Percent(f32),
 }
 
 impl SizeEntry {
     pub fn calc_size(&self, bbox_val: f32) -> f32 {
         match *self {
-            SizeEntry::Percent(percent) => bbox_val * (percent as f32 / 100.0),
+            SizeEntry::Percent(percent) => bbox_val * (percent / 100.0),
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct PosRequest {
     width: SizeEntry,
     height: SizeEntry,
@@ -39,7 +39,7 @@ impl PosRequest {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum SizeRequest {
     Size(SizeEntry, SizeEntry),
     AutoWidth(SizeEntry),
@@ -71,7 +71,7 @@ impl SizeRequest {
 
 impl Default for SizeRequest {
     fn default() -> Self {
-        Self::AutoHeight(SizeEntry::Percent(30))
+        Self::AutoHeight(SizeEntry::Percent(30.0))
     }
 }
 

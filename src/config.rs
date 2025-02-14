@@ -4,7 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{PosRequest, SizeEntry, SizeRequest, VideoEntry};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 /// TODO: Questionalable configuration.
 /// Maybe explicit `width` and `height` could be preferred...
@@ -35,7 +35,7 @@ struct PosRequestConfig(SizeEntry, SizeEntry);
 
 impl Default for PosRequestConfig {
     fn default() -> Self {
-        PosRequestConfig(SizeEntry::Percent(0), SizeEntry::Percent(0))
+        PosRequestConfig(SizeEntry::Percent(0.0), SizeEntry::Percent(0.0))
     }
 }
 
@@ -139,9 +139,9 @@ impl<'de> Deserialize<'de> for SizeEntry {
                     .strip_suffix('%')
                     .ok_or_else(|| E::invalid_value(serde::de::Unexpected::Str(value), &self))?;
                 let percentage = stripped
-                    .parse::<usize>()
+                    .parse::<f32>()
                     .map_err(|_e| E::invalid_value(serde::de::Unexpected::Str(value), &self))?;
-                if !(0..=100).contains(&percentage) {
+                if !(0.0..=100.0).contains(&percentage) {
                     return Err(E::invalid_value(serde::de::Unexpected::Str(value), &self));
                 }
                 Ok(SizeEntry::Percent(percentage))
@@ -159,12 +159,12 @@ mod test {
     #[test]
     fn parse_size_request_config() {
         assert_eq!(
-            SizeRequestConfig::Width(SizeEntry::Percent(50)),
-            serde_json::from_str("\"50%\"").unwrap()
+            SizeRequestConfig::Width(SizeEntry::Percent(50.0)),
+            serde_json::from_str("\"50.0%\"").unwrap()
         );
         assert_eq!(
-            SizeRequestConfig::WidthAndHeight(SizeEntry::Percent(50), SizeEntry::Percent(10)),
-            serde_json::from_str("[\"50%\", \"10%\"]").unwrap()
+            SizeRequestConfig::WidthAndHeight(SizeEntry::Percent(50.0), SizeEntry::Percent(10.0)),
+            serde_json::from_str("[\"50.0%\", \"10.0%\"]").unwrap()
         );
     }
 }
