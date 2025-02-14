@@ -65,10 +65,11 @@ impl PdfRenderer {
 
     /// Renders the page at the given index.
     fn image_by_page(&self, page_idx: usize) -> Option<DynamicImage> {
-        let document = self.document();
-        let pages = document.pages().iter().collect::<Vec<_>>();
-        let image = pages
-            .get(page_idx)?
+        let image = self
+            .document()
+            .pages()
+            .get(page_idx as u16)
+            .ok()?
             .render_with_config(&self.render_config)
             .ok()?
             .as_image();
