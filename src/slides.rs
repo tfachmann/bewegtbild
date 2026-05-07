@@ -117,6 +117,22 @@ impl SlidesCache {
         }
     }
 
+    pub fn toggle_pause_current(&mut self, page_idx: usize) {
+        let mut active: Vec<&mut SlidesVideoEntry> = self
+            .video_entries
+            .iter_mut()
+            .filter(|e| e.entry.slide_nums.contains(&page_idx) && e.player.is_playing())
+            .collect();
+        let any_running = active.iter().any(|e| !e.player.is_paused());
+        for e in active.iter_mut() {
+            if any_running {
+                e.player.pause();
+            } else {
+                e.player.resume();
+            }
+        }
+    }
+
     /// Handles the rendering of the videos of this slide to the given context and ui.
     ///
     /// Needs position and size of the slides to render the videos.

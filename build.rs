@@ -40,5 +40,8 @@ fn main() {
         let pdfium_lib_dest = bin_dir.join(pdfium_lib);
 
         std::fs::copy(pdfium_lib_source, pdfium_lib_dest).unwrap();
+
+        #[cfg(target_os = "linux")]
+        println!("cargo:rustc-link-arg=-Wl,-rpath,$ORIGIN");
     }
 }

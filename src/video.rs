@@ -1,4 +1,4 @@
-use egui_video::Player;
+use egui_video::{Player, PlayerState};
 
 pub struct PlayingVideo {
     path_playing: String,
@@ -55,6 +55,24 @@ impl VideoPlayer {
 
     pub fn destroy(&mut self) {
         self.video = None
+    }
+
+    pub fn pause(&mut self) {
+        if let Some(v) = self.video.as_mut() {
+            v.player.pause();
+        }
+    }
+
+    pub fn resume(&mut self) {
+        if let Some(v) = self.video.as_mut() {
+            v.player.resume();
+        }
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.video
+            .as_ref()
+            .is_some_and(|v| matches!(v.player.player_state.get(), PlayerState::Paused))
     }
 
     pub fn size(&self) -> Option<egui::Vec2> {

@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Timo Bachmann <fachmanntj@gmail.com>"]
 edition = "2021"
 include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
-rust-version = "1.79"
+# rust-version = "1.79"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -22,6 +22,7 @@ eframe = { version = "0.31", default-features = false, features = [
   "glow",          # Use the glow rendering backend. Alternative: "wgpu".
   # "persistence",   # Enable restoring app state when restarting the app.
   "wayland",
+  "x11",
 ] }
 log = "0.4"
 
