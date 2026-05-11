@@ -103,7 +103,7 @@ impl eframe::App for TemplateApp {
                 // println!("{:?}", i.keys_down);
                 // next slide
                 if (i.key_pressed(egui::Key::ArrowRight)
-                    || i.key_pressed(egui::Key::L)
+                    || (!i.modifiers.shift && i.key_pressed(egui::Key::L))
                     || i.key_pressed(egui::Key::Space)
                     || i.key_pressed(egui::Key::PageDown))
                     && self.requested_page_idx < self.slides.num_pages() - 1
@@ -112,7 +112,7 @@ impl eframe::App for TemplateApp {
                 }
                 // previous slide
                 if i.key_pressed(egui::Key::ArrowLeft)
-                    || i.key_pressed(egui::Key::H)
+                    || (!i.modifiers.shift && i.key_pressed(egui::Key::H))
                     || i.key_pressed(egui::Key::PageUp)
                 {
                     self.requested_page_idx = self.requested_page_idx.saturating_sub(1);
@@ -120,6 +120,24 @@ impl eframe::App for TemplateApp {
                 // pause/resume videos on current slide
                 if i.key_pressed(egui::Key::P) {
                     self.slides.toggle_pause_current(self.requested_page_idx);
+                }
+                // frame-step videos backward (Shift+H, only if paused)
+                if i.modifiers.shift_only() && i.key_pressed(egui::Key::H) {
+                    self.slides
+                        .step_frame_current(self.requested_page_idx, false);
+                    ctx.request_repaint();
+                    ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                }
+                // frame-step videos forward (Shift+L, only if paused)
+                if i.modifiers.shift_only() && i.key_pressed(egui::Key::L) {
+                    self.slides
+                        .step_frame_current(self.requested_page_idx, true);
+                    ctx.request_repaint();
+                    ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                }
+                // restart videos on current slide from beginning
+                if i.modifiers.shift_only() && i.key_pressed(egui::Key::R) {
+                    self.slides.restart_current(self.requested_page_idx);
                 }
                 // jump to slide (or last slide)
                 if i.modifiers.shift_only() && i.key_pressed(egui::Key::G) {

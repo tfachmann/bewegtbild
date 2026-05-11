@@ -117,6 +117,22 @@ impl SlidesCache {
         }
     }
 
+    pub fn step_frame_current(&mut self, page_idx: usize, forward: bool) {
+        for e in self.video_entries.iter_mut() {
+            if e.entry.slide_nums.contains(&page_idx) && e.player.is_playing() {
+                e.player.step_frame(forward);
+            }
+        }
+    }
+
+    pub fn restart_current(&mut self, page_idx: usize) {
+        for e in self.video_entries.iter_mut() {
+            if e.entry.slide_nums.contains(&page_idx) && e.player.is_playing() {
+                e.player.restart();
+            }
+        }
+    }
+
     pub fn toggle_pause_current(&mut self, page_idx: usize) {
         let mut active: Vec<&mut SlidesVideoEntry> = self
             .video_entries

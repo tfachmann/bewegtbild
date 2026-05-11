@@ -1,0 +1,15 @@
+{
+  "entries": [
+    {
+      "slide_num": 2,
+      "video_path": "/tmp/does_not_exist/intro.mp4",
+      "pos": ["10%", "20%"],
+      "size": ["50%", "40%"]
+    },
+    {
+      "slide_num": [4, 5, 6],
+      "video_path": "/tmp/does_not_exist/demo.mp4",
+      "size": "60%"
+    }
+  ]
+}

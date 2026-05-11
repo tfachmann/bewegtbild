@@ -75,6 +75,28 @@ impl VideoPlayer {
             .is_some_and(|v| matches!(v.player.player_state.get(), PlayerState::Paused))
     }
 
+    pub fn step_frame(&mut self, forward: bool) {
+        if let Some(v) = self.video.as_mut() {
+            if !matches!(v.player.player_state.get(), PlayerState::Paused) {
+                return;
+            }
+            if v.player.duration_ms <= 0 || v.player.framerate <= 0.0 {
+                return;
+            }
+            let frame_ms = (1000.0 / v.player.framerate) as i64;
+            let delta = if forward { frame_ms } else { -frame_ms };
+            let target = (v.player.elapsed_ms() + delta).clamp(0, v.player.duration_ms);
+            let frac = target as f32 / v.player.duration_ms as f32;
+            v.player.seek(frac);
+        }
+    }
+
+    pub fn restart(&mut self) {
+        if let Some(v) = self.video.as_mut() {
+            v.player.start();
+        }
+    }
+
     pub fn size(&self) -> Option<egui::Vec2> {
         self.video.as_ref().map(|video| video.player.size)
     }
