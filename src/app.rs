@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -86,6 +87,8 @@ pub struct TemplateApp {
     audience_window_alive: bool,
     placement: Option<PlacementStep>,
 
+    seek_scrub_paused: HashSet<String>,
+
     start_time: Instant,
 }
 
@@ -125,6 +128,7 @@ impl TemplateApp {
             presenter_mode,
             audience_window_alive: false,
             placement: None,
+            seek_scrub_paused: HashSet::new(),
             start_time: Instant::now(),
         }
     }
@@ -456,6 +460,9 @@ impl TemplateApp {
                 count += 1;
             }
         });
+        const UNIFIED_KEY: &str = "*all*";
+        let scrub = &mut self.seek_scrub_paused;
+
         if count > 0 {
             let avg_e = avg_elapsed_ms / count;
             let avg_d = avg_duration_ms / count;
@@ -479,12 +486,32 @@ impl TemplateApp {
                             .show_value(false)
                             .clamping(egui::SliderClamping::Always),
                     );
+                    let held = resp.is_pointer_button_down_on();
+                    if held && !scrub.contains(UNIFIED_KEY) {
+                        // Pause every currently-playing video for the duration of the drag.
+                        self.slides.for_each_current_video_mut(page_idx, |player| {
+                            if !player.is_paused() {
+                                let p = player.path().unwrap_or("").to_string();
+                                player.pause();
+                                scrub.insert(p);
+                            }
+                        });
+                        scrub.insert(UNIFIED_KEY.to_string());
+                    }
                     if resp.changed() {
                         self.slides.for_each_current_video_mut(page_idx, |player| {
                             player.seek_fraction(unified_frac);
                         });
                         ctx.request_repaint();
                         ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                    }
+                    if !held && scrub.remove(UNIFIED_KEY) {
+                        self.slides.for_each_current_video_mut(page_idx, |player| {
+                            let p = player.path().unwrap_or("").to_string();
+                            if scrub.remove(&p) {
+                                player.resume();
+                            }
+                        });
                     }
                 });
             });
@@ -497,7 +524,7 @@ impl TemplateApp {
             let basename = std::path::Path::new(&path)
                 .file_name()
                 .map(|os| os.to_string_lossy().to_string())
-                .unwrap_or(path);
+                .unwrap_or_else(|| path.clone());
             let duration = player.duration_ms().unwrap_or(0).max(0);
             let elapsed = player.elapsed_ms().unwrap_or(0).clamp(0, duration);
             let mut frac = if duration > 0 {
@@ -508,7 +535,10 @@ impl TemplateApp {
             let paused = player.is_paused();
 
             ui.horizontal(|ui| {
-                ui.add_sized(egui::vec2(160.0, 20.0), egui::Label::new(basename).truncate());
+                ui.add_sized(
+                    egui::vec2(160.0, 20.0),
+                    egui::Label::new(basename).truncate(),
+                );
                 let btn_label = if paused { "▶" } else { "⏸" };
                 if ui.button(btn_label).clicked() {
                     player.toggle_pause();
@@ -527,9 +557,17 @@ impl TemplateApp {
                             .show_value(false)
                             .clamping(egui::SliderClamping::Always),
                     );
+                    let held = resp.is_pointer_button_down_on();
+                    if held && !paused && !scrub.contains(&path) {
+                        player.pause();
+                        scrub.insert(path.clone());
+                    }
                     if resp.changed() && duration > 0 {
                         player.seek_fraction(frac);
                         seek_requested = true;
+                    }
+                    if !held && scrub.remove(&path) {
+                        player.resume();
                     }
                 });
             });
