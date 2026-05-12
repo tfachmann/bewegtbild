@@ -5,6 +5,14 @@ use std::path::PathBuf;
 
 pub use app::TemplateApp;
 
+#[derive(Clone, Copy, Debug)]
+pub struct MonitorRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 mod config;
 pub use config::Config;
 mod pdf;

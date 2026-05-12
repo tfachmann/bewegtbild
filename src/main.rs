@@ -19,6 +19,33 @@ struct Args {
 
     #[clap(long, help = "Reload the configuration on change")]
     reload: bool,
+
+    #[clap(long, help = "Audience monitor index (0-based)")]
+    audience_monitor: Option<usize>,
+
+    #[clap(long, help = "Start in presenter mode (two windows)")]
+    presenter: bool,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn enumerate_monitors() -> Vec<bewegtbild::MonitorRect> {
+    let infos = display_info::DisplayInfo::all().unwrap_or_default();
+    eprintln!("Detected {} monitor(s):", infos.len());
+    for (i, d) in infos.iter().enumerate() {
+        eprintln!(
+            "  [{}] name={:?} primary={} pos=({}, {}) size=({}x{}) scale={}",
+            i, d.friendly_name, d.is_primary, d.x, d.y, d.width, d.height, d.scale_factor
+        );
+    }
+    infos
+        .into_iter()
+        .map(|d| bewegtbild::MonitorRect {
+            x: d.x,
+            y: d.y,
+            width: d.width,
+            height: d.height,
+        })
+        .collect()
 }
 
 // When compiling natively:
@@ -84,10 +111,20 @@ fn main() -> eframe::Result {
         None => Config::default(),
     };
 
+    let monitors = enumerate_monitors();
+    let audience_monitor_idx = args.audience_monitor.or_else(|| {
+        if monitors.len() > 1 {
+            Some(monitors.len() - 1)
+        } else {
+            None
+        }
+    });
+
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 300.0])
-            .with_min_inner_size([300.0, 220.0])
+            .with_inner_size([1280.0, 720.0])
+            .with_min_inner_size([400.0, 300.0])
+            .with_title("bewegtbild — presenter")
             .with_icon(
                 // NOTE: Adding an icon is optional
                 eframe::icon_data::from_png_bytes(&include_bytes!("../assets/icon-256.png")[..])
@@ -98,12 +135,15 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "bewegtbild",
         native_options,
-        Box::new(|cc| {
+        Box::new(move |cc| {
             Ok(Box::new(bewegtbild::TemplateApp::new(
                 cc,
                 args.pdf_path,
                 config.video_entries(),
                 ui_rx_opt,
+                monitors,
+                audience_monitor_idx,
+                args.presenter,
             )))
         }),
     )

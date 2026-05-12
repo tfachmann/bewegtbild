@@ -1,14 +1,17 @@
 use std::path::PathBuf;
+use std::time::Instant;
 
-use egui::{ColorImage, TextureHandle};
+use egui::{ColorImage, TextureHandle, ViewportCommand};
 use pdfium_render::prelude::PdfRenderConfig;
 use std::sync::mpsc;
 
 use crate::{
     pdf::PdfRenderer,
     slides::{Slides, SlidesCache},
-    VideoEntry,
+    MonitorRect, VideoEntry,
 };
+
+const AUDIENCE_VIEWPORT_ID: &str = "audience";
 
 fn is_num(key: &egui::Key) -> bool {
     use egui::Key;
@@ -44,40 +47,118 @@ fn key_to_num(key: &egui::Key) -> Option<usize> {
     }
 }
 
-/// We derive Deserialize/Serialize so we can persist app state on shutdown.
+#[derive(Default)]
+struct DeferredActions {
+    cycle_audience_monitor: bool,
+    toggle_audience_fullscreen: bool,
+    toggle_presenter_mode: bool,
+}
+
+struct PlacementStep {
+    target_monitor: usize,
+    final_fullscreen: bool,
+    countdown: u8,
+}
+
 pub struct TemplateApp {
-    // Example stuff:
     slides: SlidesCache,
-    texture: TextureHandle,
+    current_tex: TextureHandle,
+    next_tex: TextureHandle,
     config_changed_rx: Option<mpsc::Receiver<Vec<VideoEntry>>>,
 
     requested_page_idx: usize,
+    last_uploaded_curr: Option<usize>,
+    last_uploaded_next: Option<usize>,
 
     key_stack: Vec<egui::Key>,
+
+    monitors: Vec<MonitorRect>,
+    audience_monitor_idx: Option<usize>,
+    audience_fullscreen: bool,
+    presenter_mode: bool,
+    audience_window_alive: bool,
+    placement: Option<PlacementStep>,
+
+    start_time: Instant,
 }
 
 impl TemplateApp {
-    /// Called once before the first frame.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cc: &eframe::CreationContext<'_>,
         pdf_path: PathBuf,
         config: Vec<VideoEntry>,
         config_changed_rx: Option<mpsc::Receiver<Vec<VideoEntry>>>,
+        monitors: Vec<MonitorRect>,
+        audience_monitor_idx: Option<usize>,
+        presenter_mode: bool,
     ) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
         let pdf_renderer = PdfRenderer::new(PdfRenderConfig::new(), pdf_path);
 
         Self {
             slides: SlidesCache::new(Slides::new(pdf_renderer), 100, 100, config),
-            texture: cc.egui_ctx.load_texture(
-                "slides_page",
+            current_tex: cc.egui_ctx.load_texture(
+                "current_slide",
+                ColorImage::example(),
+                Default::default(),
+            ),
+            next_tex: cc.egui_ctx.load_texture(
+                "next_slide",
                 ColorImage::example(),
                 Default::default(),
             ),
             requested_page_idx: 0,
+            last_uploaded_curr: None,
+            last_uploaded_next: None,
             key_stack: Vec::new(),
             config_changed_rx,
+            monitors,
+            audience_monitor_idx,
+            audience_fullscreen: true,
+            presenter_mode,
+            audience_window_alive: false,
+            placement: None,
+            start_time: Instant::now(),
+        }
+    }
+
+    fn start_placement(&mut self, target_monitor: usize, final_fullscreen: bool) {
+        self.placement = Some(PlacementStep {
+            target_monitor,
+            final_fullscreen,
+            countdown: 3,
+        });
+    }
+
+    fn tick_placement(&mut self, ctx: &egui::Context) {
+        let Some(step) = self.placement.as_mut() else {
+            return;
+        };
+        let audience_id = egui::ViewportId::from_hash_of(AUDIENCE_VIEWPORT_ID);
+        match step.countdown {
+            3 => {
+                ctx.send_viewport_cmd_to(audience_id, ViewportCommand::Fullscreen(false));
+            }
+            2 => {
+                if let Some(m) = self.monitors.get(step.target_monitor).copied() {
+                    ctx.send_viewport_cmd_to(
+                        audience_id,
+                        ViewportCommand::OuterPosition(egui::pos2(m.x as f32, m.y as f32)),
+                    );
+                }
+            }
+            1 => {
+                if step.final_fullscreen {
+                    ctx.send_viewport_cmd_to(audience_id, ViewportCommand::Fullscreen(true));
+                }
+            }
+            _ => {}
+        }
+        step.countdown = step.countdown.saturating_sub(1);
+        if step.countdown == 0 {
+            self.placement = None;
+        } else {
+            ctx.request_repaint_after(std::time::Duration::from_millis(80));
         }
     }
 
@@ -93,140 +174,326 @@ impl TemplateApp {
             )
         }
     }
+
+    fn handle_input(&mut self, ctx: &egui::Context) -> DeferredActions {
+        let mut actions = DeferredActions::default();
+        ctx.input(|i| {
+            let num_pages = self.slides.num_pages();
+            if (i.key_pressed(egui::Key::ArrowRight)
+                || (!i.modifiers.shift && i.key_pressed(egui::Key::L))
+                || i.key_pressed(egui::Key::Space)
+                || i.key_pressed(egui::Key::PageDown))
+                && self.requested_page_idx < num_pages - 1
+            {
+                self.requested_page_idx += 1;
+            }
+            if i.key_pressed(egui::Key::ArrowLeft)
+                || (!i.modifiers.shift && i.key_pressed(egui::Key::H))
+                || i.key_pressed(egui::Key::PageUp)
+            {
+                self.requested_page_idx = self.requested_page_idx.saturating_sub(1);
+            }
+            if i.key_pressed(egui::Key::P) {
+                self.slides.toggle_pause_current(self.requested_page_idx);
+            }
+            if i.modifiers.shift_only() && i.key_pressed(egui::Key::H) {
+                self.slides
+                    .step_frame_current(self.requested_page_idx, false);
+            }
+            if i.modifiers.shift_only() && i.key_pressed(egui::Key::L) {
+                self.slides
+                    .step_frame_current(self.requested_page_idx, true);
+            }
+            if i.modifiers.shift_only() && i.key_pressed(egui::Key::R) {
+                self.slides.restart_current(self.requested_page_idx);
+            }
+            if i.modifiers.shift_only() && i.key_pressed(egui::Key::G) {
+                if let Some(num) = self.stack_as_num() {
+                    self.requested_page_idx = num.min(num_pages - 1);
+                } else {
+                    self.requested_page_idx = num_pages - 1;
+                }
+                self.key_stack.clear();
+            }
+            if i.key_pressed(egui::Key::Enter) {
+                if let Some(num) = self.stack_as_num() {
+                    self.requested_page_idx = num.min(num_pages - 1);
+                }
+                self.key_stack.clear();
+            }
+            if i.key_pressed(egui::Key::Escape) {
+                self.key_stack.clear();
+            }
+            if i.key_pressed(egui::Key::Num0)
+                || i.key_pressed(egui::Key::Num1)
+                || i.key_pressed(egui::Key::Num2)
+                || i.key_pressed(egui::Key::Num3)
+                || i.key_pressed(egui::Key::Num4)
+                || i.key_pressed(egui::Key::Num5)
+                || i.key_pressed(egui::Key::Num6)
+                || i.key_pressed(egui::Key::Num7)
+                || i.key_pressed(egui::Key::Num8)
+                || i.key_pressed(egui::Key::Num9)
+            {
+                let pressed_key = i.events.iter().find_map(|ev| {
+                    if let egui::Event::Key { key, .. } = ev {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(key) = pressed_key {
+                    self.key_stack.push(*key)
+                }
+            }
+            if i.key_pressed(egui::Key::F2) {
+                actions.toggle_presenter_mode = true;
+            }
+            if i.key_pressed(egui::Key::F5) {
+                actions.cycle_audience_monitor = true;
+            }
+            if i.key_pressed(egui::Key::F11) {
+                actions.toggle_audience_fullscreen = true;
+            }
+        });
+        actions
+    }
+
+    fn apply_deferred_actions(&mut self, ctx: &egui::Context, actions: DeferredActions) {
+        if actions.toggle_presenter_mode {
+            self.presenter_mode = !self.presenter_mode;
+            if !self.presenter_mode {
+                let audience_id = egui::ViewportId::from_hash_of(AUDIENCE_VIEWPORT_ID);
+                ctx.send_viewport_cmd_to(audience_id, ViewportCommand::Close);
+                self.audience_window_alive = false;
+                self.placement = None;
+            }
+        }
+        if actions.cycle_audience_monitor && !self.monitors.is_empty() && self.presenter_mode {
+            let next_idx = match self.audience_monitor_idx {
+                Some(idx) => (idx + 1) % self.monitors.len(),
+                None => 0,
+            };
+            self.audience_monitor_idx = Some(next_idx);
+            eprintln!(
+                "F5: switching audience to monitor {} ({:?})",
+                next_idx, self.monitors[next_idx]
+            );
+            self.start_placement(next_idx, self.audience_fullscreen);
+        }
+        if actions.toggle_audience_fullscreen && self.presenter_mode {
+            self.audience_fullscreen = !self.audience_fullscreen;
+            let audience_id = egui::ViewportId::from_hash_of(AUDIENCE_VIEWPORT_ID);
+            ctx.send_viewport_cmd_to(
+                audience_id,
+                ViewportCommand::Fullscreen(self.audience_fullscreen),
+            );
+        }
+    }
+
+    fn audience_pixel_size(&self, ctx: &egui::Context) -> (i32, i32) {
+        // 1. live audience viewport
+        let audience_id = egui::ViewportId::from_hash_of(AUDIENCE_VIEWPORT_ID);
+        let (rect, ppp) = ctx.input_for(audience_id, |i| (i.screen_rect(), i.pixels_per_point()));
+        let w = (rect.max.x - rect.min.x) * ppp;
+        let h = (rect.max.y - rect.min.y) * ppp;
+        if w > 1.0 && h > 1.0 {
+            return (w as i32, h as i32);
+        }
+        // 2. fall back to display-info physical pixels of the target monitor
+        if let Some(idx) = self.audience_monitor_idx {
+            if let Some(m) = self.monitors.get(idx) {
+                return (m.width as i32, m.height as i32);
+            }
+        }
+        // 3. sane default
+        (1920, 1080)
+    }
+
+    fn upload_textures_if_needed(&mut self, ctx: &egui::Context) {
+        let (width, height) = if self.presenter_mode {
+            self.audience_pixel_size(ctx)
+        } else {
+            let rect = ctx.input(|i| i.screen_rect());
+            let ppp = ctx.input(|i| i.pixels_per_point());
+            (
+                ((rect.max.x - rect.min.x) * ppp) as i32,
+                ((rect.max.y - rect.min.y) * ppp) as i32,
+            )
+        };
+        self.slides.change_size(width, height);
+
+        let curr_idx = self.requested_page_idx;
+        let curr_changed = self.last_uploaded_curr != Some(curr_idx);
+        if curr_changed {
+            if let Some(img) = self.slides.get_page(curr_idx) {
+                self.current_tex.set(img, Default::default());
+                self.last_uploaded_curr = Some(curr_idx);
+            }
+        }
+
+        if self.presenter_mode {
+            let next_idx = curr_idx + 1;
+            if next_idx < self.slides.num_pages() {
+                let next_changed = self.last_uploaded_next != Some(next_idx);
+                if next_changed {
+                    if let Some(img) = self.slides.get_page(next_idx) {
+                        self.next_tex.set(img, Default::default());
+                        self.last_uploaded_next = Some(next_idx);
+                    }
+                    if let Some(img) = self.slides.get_page(curr_idx) {
+                        self.current_tex.set(img, Default::default());
+                    }
+                }
+            }
+        }
+    }
+
+    fn draw_presenter(&mut self, ui: &mut egui::Ui) {
+        let elapsed = self.start_time.elapsed();
+        let mins = elapsed.as_secs() / 60;
+        let secs = elapsed.as_secs() % 60;
+        let num_pages = self.slides.num_pages();
+        let next_idx = self.requested_page_idx + 1;
+        let has_next = next_idx < num_pages;
+
+        ui.horizontal(|ui| {
+            ui.heading(format!("{:02}:{:02}", mins, secs));
+            if ui.button("⟲ reset").clicked() {
+                self.start_time = Instant::now();
+            }
+            ui.label(format!(
+                "  slide {} / {}",
+                self.requested_page_idx + 1,
+                num_pages
+            ));
+        });
+        ui.separator();
+
+        let avail = ui.available_rect_before_wrap();
+        let pad = 8.0;
+        let inner_w = avail.width() - pad;
+        let curr_w = inner_w * 0.65;
+        let next_w = inner_w * 0.35 - pad;
+
+        let curr_size = self.current_tex.size_vec2();
+        let next_size = self.next_tex.size_vec2();
+
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui(egui::vec2(curr_w, avail.height()), |ui| {
+                ui.label("Current");
+                let aspect = curr_size.y / curr_size.x;
+                let w = ui.available_width();
+                let h = (w * aspect).min(ui.available_height() - 20.0);
+                let img = egui::Image::new(egui::load::SizedTexture::new(
+                    self.current_tex.id(),
+                    egui::vec2(w, h),
+                ));
+                ui.add(img);
+            });
+            ui.separator();
+            ui.allocate_ui(egui::vec2(next_w, avail.height()), |ui| {
+                if has_next {
+                    ui.label("Next");
+                    let aspect = next_size.y / next_size.x;
+                    let w = ui.available_width();
+                    let h = (w * aspect).min(ui.available_height() - 20.0);
+                    let img = egui::Image::new(egui::load::SizedTexture::new(
+                        self.next_tex.id(),
+                        egui::vec2(w, h),
+                    ));
+                    ui.add(img);
+                } else {
+                    ui.label("Next: (end)");
+                }
+            });
+        });
+    }
+
+    fn draw_audience(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
+        let slide_size = self.current_tex.size_vec2();
+        let available_rect = ui.available_rect_before_wrap();
+
+        let avail_w = available_rect.width();
+        let avail_h = available_rect.height();
+        let scale = (avail_w / slide_size.x).min(avail_h / slide_size.y);
+        let render_size = slide_size * scale;
+        let slide_pos = available_rect.center() - 0.5 * render_size;
+        let img_rect = egui::Rect::from_min_size(slide_pos, render_size);
+
+        ui.painter().rect_filled(
+            available_rect,
+            egui::CornerRadius::ZERO,
+            egui::Color32::BLACK,
+        );
+        ui.put(
+            img_rect,
+            egui::Image::new(egui::load::SizedTexture::new(
+                self.current_tex.id(),
+                render_size,
+            ))
+            .fit_to_exact_size(render_size),
+        );
+        self.slides
+            .handle_video(self.requested_page_idx, slide_pos, render_size, ctx, ui);
+    }
 }
 
 impl eframe::App for TemplateApp {
-    /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ctx.input(|i| {
-                // println!("{:?}", i.keys_down);
-                // next slide
-                if (i.key_pressed(egui::Key::ArrowRight)
-                    || (!i.modifiers.shift && i.key_pressed(egui::Key::L))
-                    || i.key_pressed(egui::Key::Space)
-                    || i.key_pressed(egui::Key::PageDown))
-                    && self.requested_page_idx < self.slides.num_pages() - 1
-                {
-                    self.requested_page_idx += 1;
+        if let Some(config_changed_rx) = &self.config_changed_rx {
+            if let Ok(new_video_config) = config_changed_rx.try_recv() {
+                println!("Config changed from UI");
+                self.slides.change_video_entries(new_video_config);
+            }
+            ctx.request_repaint();
+        }
+
+        let actions = self.handle_input(ctx);
+        self.apply_deferred_actions(ctx, actions);
+
+        self.upload_textures_if_needed(ctx);
+
+        // audience viewport only when presenter mode is active
+        if self.presenter_mode {
+            let audience_id = egui::ViewportId::from_hash_of(AUDIENCE_VIEWPORT_ID);
+            let mut builder = egui::ViewportBuilder::default()
+                .with_title("bewegtbild — audience")
+                .with_inner_size([960.0, 540.0]);
+            if let Some(idx) = self.audience_monitor_idx {
+                if let Some(m) = self.monitors.get(idx) {
+                    builder = builder.with_position(egui::pos2(m.x as f32, m.y as f32));
                 }
-                // previous slide
-                if i.key_pressed(egui::Key::ArrowLeft)
-                    || (!i.modifiers.shift && i.key_pressed(egui::Key::H))
-                    || i.key_pressed(egui::Key::PageUp)
-                {
-                    self.requested_page_idx = self.requested_page_idx.saturating_sub(1);
+            }
+            if !self.audience_window_alive {
+                self.audience_window_alive = true;
+                if let Some(idx) = self.audience_monitor_idx {
+                    self.start_placement(idx, self.audience_fullscreen);
                 }
-                // pause/resume videos on current slide
-                if i.key_pressed(egui::Key::P) {
-                    self.slides.toggle_pause_current(self.requested_page_idx);
-                }
-                // frame-step videos backward (Shift+H, only if paused)
-                if i.modifiers.shift_only() && i.key_pressed(egui::Key::H) {
-                    self.slides
-                        .step_frame_current(self.requested_page_idx, false);
-                    ctx.request_repaint();
-                    ctx.request_repaint_after(std::time::Duration::from_millis(150));
-                }
-                // frame-step videos forward (Shift+L, only if paused)
-                if i.modifiers.shift_only() && i.key_pressed(egui::Key::L) {
-                    self.slides
-                        .step_frame_current(self.requested_page_idx, true);
-                    ctx.request_repaint();
-                    ctx.request_repaint_after(std::time::Duration::from_millis(150));
-                }
-                // restart videos on current slide from beginning
-                if i.modifiers.shift_only() && i.key_pressed(egui::Key::R) {
-                    self.slides.restart_current(self.requested_page_idx);
-                }
-                // jump to slide (or last slide)
-                if i.modifiers.shift_only() && i.key_pressed(egui::Key::G) {
-                    if let Some(num) = self.stack_as_num() {
-                        self.requested_page_idx = if num >= self.slides.num_pages() - 1 {
-                            self.slides.num_pages() - 1
-                        } else {
-                            num
-                        }
-                    } else {
-                        self.requested_page_idx = self.slides.num_pages() - 1
-                    }
-                    self.key_stack.clear();
-                }
-                // jump to slide
-                if i.key_pressed(egui::Key::Enter) {
-                    if let Some(num) = self.stack_as_num() {
-                        self.requested_page_idx = if num >= self.slides.num_pages() - 1 {
-                            self.slides.num_pages() - 1
-                        } else {
-                            num
-                        }
-                    }
-                    self.key_stack.clear();
-                }
-                // cancel key stack
-                if i.key_pressed(egui::Key::Escape) {
-                    self.key_stack.clear();
-                }
-                // number pressed
-                if i.key_pressed(egui::Key::Num0)
-                    || i.key_pressed(egui::Key::Num1)
-                    || i.key_pressed(egui::Key::Num2)
-                    || i.key_pressed(egui::Key::Num3)
-                    || i.key_pressed(egui::Key::Num4)
-                    || i.key_pressed(egui::Key::Num5)
-                    || i.key_pressed(egui::Key::Num6)
-                    || i.key_pressed(egui::Key::Num7)
-                    || i.key_pressed(egui::Key::Num8)
-                    || i.key_pressed(egui::Key::Num9)
-                {
-                    let pressed_key = i.events.iter().find_map(|ev| {
-                        if let egui::Event::Key { key, .. } = ev {
-                            Some(key)
-                        } else {
-                            None
-                        }
+            }
+            self.tick_placement(ctx);
+
+            ctx.show_viewport_immediate(audience_id, builder, |ctx, _class| {
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::NONE.fill(egui::Color32::BLACK))
+                    .show(ctx, |ui| {
+                        self.draw_audience(ctx, ui);
                     });
-                    if let Some(key) = pressed_key {
-                        self.key_stack.push(*key)
-                    }
-                }
             });
+        }
 
-            // handle config changes (for the `config` command)
-            if let Some(config_changed_rx) = &self.config_changed_rx {
-                if let Ok(new_video_config) = config_changed_rx.try_recv() {
-                    println!("Config changed from UI");
-                    self.slides.change_video_entries(new_video_config);
-                }
-                // necessary to register changes to the config
-                ctx.request_repaint();
-            }
-
-            let size = ctx.input(|i: &egui::InputState| i.screen_rect());
-            let width = size.max.x;
-            let height = size.max.y;
-            self.slides.change_size(width as i32, height as i32);
-
-            if let Some(img) = self.slides.get_page(self.requested_page_idx) {
-                self.texture.set(img, Default::default());
-            }
-
-            let slide_size = self.texture.size_vec2();
-            let sized_texture = egui::load::SizedTexture::new(self.texture.id(), slide_size);
-            let available_rect = ui.available_rect_before_wrap();
-            let slide_pos = available_rect.center() - 0.5 * slide_size;
-            let img_rect = egui::Rect::from_min_size(slide_pos, slide_size);
-            ui.put(
-                img_rect,
-                egui::Image::new(sized_texture).fit_to_exact_size(slide_size),
-            );
-            self.slides
-                .handle_video(self.requested_page_idx, slide_pos, slide_size, ctx, ui);
-
-            ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                // powered_by_egui_and_eframe(ui);
-                egui::warn_if_debug_build(ui);
+        // root window
+        if self.presenter_mode {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.draw_presenter(ui);
             });
-        });
+            ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        } else {
+            egui::CentralPanel::default()
+                .frame(egui::Frame::NONE.fill(egui::Color32::BLACK))
+                .show(ctx, |ui| {
+                    self.draw_audience(ctx, ui);
+                });
+        }
     }
 }
