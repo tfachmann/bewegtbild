@@ -30,6 +30,13 @@ fn is_num(key: &egui::Key) -> bool {
     )
 }
 
+fn format_ms(ms: u64) -> String {
+    let total_secs = ms / 1000;
+    let mins = total_secs / 60;
+    let secs = total_secs % 60;
+    format!("{:02}:{:02}", mins, secs)
+}
+
 fn key_to_num(key: &egui::Key) -> Option<usize> {
     use egui::Key;
     match key {
@@ -349,12 +356,13 @@ impl TemplateApp {
         }
     }
 
-    fn draw_presenter(&mut self, ui: &mut egui::Ui) {
+    fn draw_presenter(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         let elapsed = self.start_time.elapsed();
         let mins = elapsed.as_secs() / 60;
         let secs = elapsed.as_secs() % 60;
         let num_pages = self.slides.num_pages();
-        let next_idx = self.requested_page_idx + 1;
+        let curr_idx = self.requested_page_idx;
+        let next_idx = curr_idx + 1;
         let has_next = next_idx < num_pages;
 
         ui.horizontal(|ui| {
@@ -362,13 +370,17 @@ impl TemplateApp {
             if ui.button("⟲ reset").clicked() {
                 self.start_time = Instant::now();
             }
-            ui.label(format!(
-                "  slide {} / {}",
-                self.requested_page_idx + 1,
-                num_pages
-            ));
+            ui.label(format!("  slide {} / {}", curr_idx + 1, num_pages));
         });
         ui.separator();
+
+        // Bottom video controls panel reserves its own space first;
+        // remaining area is taken by the thumbnails below.
+        egui::TopBottomPanel::bottom("video_controls")
+            .resizable(false)
+            .show_inside(ui, |ui| {
+                self.draw_video_controls(ctx, ui, curr_idx);
+            });
 
         let avail = ui.available_rect_before_wrap();
         let pad = 8.0;
@@ -408,6 +420,125 @@ impl TemplateApp {
                 }
             });
         });
+    }
+
+    fn draw_video_controls(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, page_idx: usize) {
+        let any_running = self.slides.any_current_video_running(page_idx);
+        ui.horizontal(|ui| {
+            ui.heading("Videos");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let pause_label = if any_running {
+                    "⏸ pause all"
+                } else {
+                    "▶ resume all"
+                };
+                if ui.button(pause_label).clicked() {
+                    self.slides.toggle_pause_current(page_idx);
+                    ctx.request_repaint();
+                }
+                if ui.button("↺ restart all").clicked() {
+                    self.slides.restart_current(page_idx);
+                    ctx.request_repaint();
+                }
+            });
+        });
+        ui.separator();
+
+        // Unified slider: average fraction across active videos; drag → seek all.
+        let mut avg_elapsed_ms: i64 = 0;
+        let mut avg_duration_ms: i64 = 0;
+        let mut count: i64 = 0;
+        self.slides.for_each_current_video_mut(page_idx, |player| {
+            let d = player.duration_ms().unwrap_or(0);
+            if d > 0 {
+                avg_elapsed_ms += player.elapsed_ms().unwrap_or(0).clamp(0, d);
+                avg_duration_ms += d;
+                count += 1;
+            }
+        });
+        if count > 0 {
+            let avg_e = avg_elapsed_ms / count;
+            let avg_d = avg_duration_ms / count;
+            let mut unified_frac = if avg_d > 0 {
+                avg_e as f32 / avg_d as f32
+            } else {
+                0.0
+            };
+            ui.horizontal(|ui| {
+                ui.add_sized(egui::vec2(160.0, 20.0), egui::Label::new("all videos"));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(format!(
+                        "{} / {} (avg)",
+                        format_ms(avg_e as u64),
+                        format_ms(avg_d as u64),
+                    ));
+                    let slider_width = (ui.available_width() - 8.0).max(40.0);
+                    ui.spacing_mut().slider_width = slider_width;
+                    let resp = ui.add(
+                        egui::Slider::new(&mut unified_frac, 0.0..=1.0)
+                            .show_value(false)
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                    if resp.changed() {
+                        self.slides.for_each_current_video_mut(page_idx, |player| {
+                            player.seek_fraction(unified_frac);
+                        });
+                        ctx.request_repaint();
+                        ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                    }
+                });
+            });
+            ui.separator();
+        }
+
+        let mut seek_requested = false;
+        self.slides.for_each_current_video_mut(page_idx, |player| {
+            let path = player.path().unwrap_or("(video)").to_string();
+            let basename = std::path::Path::new(&path)
+                .file_name()
+                .map(|os| os.to_string_lossy().to_string())
+                .unwrap_or(path);
+            let duration = player.duration_ms().unwrap_or(0).max(0);
+            let elapsed = player.elapsed_ms().unwrap_or(0).clamp(0, duration);
+            let mut frac = if duration > 0 {
+                elapsed as f32 / duration as f32
+            } else {
+                0.0
+            };
+            let paused = player.is_paused();
+
+            ui.horizontal(|ui| {
+                ui.add_sized(egui::vec2(160.0, 20.0), egui::Label::new(basename).truncate());
+                let btn_label = if paused { "▶" } else { "⏸" };
+                if ui.button(btn_label).clicked() {
+                    player.toggle_pause();
+                }
+                let time_text = format!(
+                    "{} / {}",
+                    format_ms(elapsed as u64),
+                    format_ms(duration as u64),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(time_text);
+                    let slider_width = (ui.available_width() - 8.0).max(40.0);
+                    ui.spacing_mut().slider_width = slider_width;
+                    let resp = ui.add(
+                        egui::Slider::new(&mut frac, 0.0..=1.0)
+                            .show_value(false)
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                    if resp.changed() && duration > 0 {
+                        player.seek_fraction(frac);
+                        seek_requested = true;
+                    }
+                });
+            });
+        });
+
+        if seek_requested {
+            ctx.request_repaint();
+            ctx.request_repaint_after(std::time::Duration::from_millis(150));
+        }
     }
 
     fn draw_audience(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -485,7 +616,7 @@ impl eframe::App for TemplateApp {
         // root window
         if self.presenter_mode {
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.draw_presenter(ui);
+                self.draw_presenter(ctx, ui);
             });
             ctx.request_repaint_after(std::time::Duration::from_millis(500));
         } else {

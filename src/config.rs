@@ -56,7 +56,7 @@ impl SlideNumConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct VideoConfig {
+pub struct VideoConfig {
     #[serde(rename = "slide_num")]
     slide_nums: SlideNumConfig,
     video_path: PathBuf,

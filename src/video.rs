@@ -47,12 +47,6 @@ impl VideoPlayer {
         self.video.is_some()
     }
 
-    pub fn is_path_playing(&self, video_path: &str) -> bool {
-        self.video
-            .as_ref()
-            .is_some_and(|video| video.path_playing == video_path)
-    }
-
     pub fn destroy(&mut self) {
         self.video = None
     }
@@ -99,5 +93,31 @@ impl VideoPlayer {
 
     pub fn size(&self) -> Option<egui::Vec2> {
         self.video.as_ref().map(|video| video.player.size)
+    }
+
+    pub fn elapsed_ms(&self) -> Option<i64> {
+        self.video.as_ref().map(|v| v.player.elapsed_ms())
+    }
+
+    pub fn duration_ms(&self) -> Option<i64> {
+        self.video.as_ref().map(|v| v.player.duration_ms)
+    }
+
+    pub fn seek_fraction(&mut self, frac: f32) {
+        if let Some(v) = self.video.as_mut() {
+            v.player.seek(frac.clamp(0.0, 1.0));
+        }
+    }
+
+    pub fn path(&self) -> Option<&str> {
+        self.video.as_ref().map(|v| v.path_playing.as_str())
+    }
+
+    pub fn toggle_pause(&mut self) {
+        if self.is_paused() {
+            self.resume();
+        } else {
+            self.pause();
+        }
     }
 }

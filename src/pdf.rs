@@ -76,13 +76,6 @@ impl PdfRenderer {
         Some(image)
     }
 
-    pub fn load_document(&mut self, path: PathBuf) {
-        let (bytes, num_pages) = load_and_calc_pages(&self.pdfium, &path);
-        self.document_bytes = bytes;
-        self.num_pages = num_pages;
-        self.path = path.to_owned();
-    }
-
     pub fn set_size(&mut self, size: (i32, i32)) {
         self.render_config = PdfRenderConfig::new()
             .set_target_width(size.0)

@@ -133,6 +133,24 @@ impl SlidesCache {
         }
     }
 
+    pub fn for_each_current_video_mut<F: FnMut(&mut VideoPlayer)>(
+        &mut self,
+        page_idx: usize,
+        mut f: F,
+    ) {
+        for e in self.video_entries.iter_mut() {
+            if e.entry.slide_nums.contains(&page_idx) && e.player.is_playing() {
+                f(&mut e.player);
+            }
+        }
+    }
+
+    pub fn any_current_video_running(&self, page_idx: usize) -> bool {
+        self.video_entries.iter().any(|e| {
+            e.entry.slide_nums.contains(&page_idx) && e.player.is_playing() && !e.player.is_paused()
+        })
+    }
+
     pub fn toggle_pause_current(&mut self, page_idx: usize) {
         let mut active: Vec<&mut SlidesVideoEntry> = self
             .video_entries
@@ -202,10 +220,6 @@ pub struct Slides {
 impl Slides {
     pub fn new(pdf_renderer: PdfRenderer) -> Self {
         Self { pdf_renderer }
-    }
-
-    pub fn num_pages(&self) -> usize {
-        self.pdf_renderer.num_pages
     }
 
     pub fn change_page(
