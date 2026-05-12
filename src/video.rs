@@ -37,7 +37,9 @@ impl VideoPlayer {
 
     pub fn render(&mut self, ui: &mut egui::Ui, rect: egui::Rect) -> Option<egui::Response> {
         if let Some(video) = self.video.as_mut() {
-            Some(video.player.ui_at(ui, rect))
+            let resp = video.player.render_frame_at(ui, rect);
+            video.player.process_state();
+            Some(resp)
         } else {
             None
         }
